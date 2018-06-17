@@ -21,15 +21,13 @@ class SoundPlayer:
         self.loop = False
 
         # event flags
-        self.paused = threading.Event()
-        self.stoped = threading.Event()
+        self.event_pause = threading.Event()
+        self.event_stop = threading.Event()
+        self.event_init()
 
-        # sounds queue
-        # self.sounds = Queue()
-
-    def clear(self):
-        self.paused.clear()
-        self.stoped.clear()
+    def event_init(self):
+        self.event_pause.clear()
+        self.event_stop.clear()
 
     def playsound(self, wavfile):
         if (wavfile == ""):
@@ -52,15 +50,20 @@ class SoundPlayer:
         # def non-blocking callback
         def callback(in_data, frame_count, time_info, status):
             data = wf.readframes(frame_count)
-            if self.stoped.is_set():
+            if self.event_stop.is_set():
                 logger.i('stop sound.')
                 return (data, pyaudio.paComplete)
-            if self.paused.is_set():
-                logger.i('paused sound.')
-                self.paused.wait()
+            if self.event_pause.is_set():
+                logger.i('pause sound.')
+                while self.event_pause.is_set():
+                    time.sleep(0.1)
+                    if self.event_stop.is_set():
+                        # finish
+                        break
             else:
-                logger.d('non-blocking play ({}, {}, {}, {})'.format(in_data,
-                                                                     frame_count, time_info, status))
+                # logger.d('non-blocking play ({}, {}, {}, {})'.format(in_data,
+                #                                                      frame_count, time_info, status))
+                pass
             return (data, pyaudio.paContinue)
 
         # open stream
@@ -68,6 +71,7 @@ class SoundPlayer:
         s = p.open(format=p.get_format_from_width(wf.getsampwidth()),
                    channels=wf.getnchannels(),
                    rate=wf.getframerate(),
+                   frames_per_buffer=CHUNK,
                    output=True,
                    stream_callback=callback)
 
@@ -77,30 +81,31 @@ class SoundPlayer:
 
         # wait finish
         while s.is_active():
-            time.sleep(0.01)  # 1ms
+            time.sleep(0.1)
 
         # closing stream
         s.stop_stream()
         s.close()
         wf.close()
         p.terminate()
-        self.clear()
         logger.i('finished sound play.')
 
     def do_play(self, wavfile):
+        # clear event flags
+        self.event_init()
         # threading
         self.thread = threading.Thread(
             target=self.playsound, args=(wavfile,))
         self.thread.start()
 
     def do_pause(self):
-        self.paused.set()
+        self.event_pause.set()
 
     def do_resume(self):
-        self.paused.clear()
+        self.event_pause.clear()
 
     def do_stop(self):
-        self.stoped.set()
+        self.event_stop.set()
 
 
 def myhelp():

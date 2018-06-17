@@ -4,3 +4,6 @@
 
 # python files
 *.pyc
+test/snowwind.wav
+test/springwind.wav
+test/wandervogel.wav

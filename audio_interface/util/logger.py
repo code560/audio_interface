@@ -16,8 +16,10 @@ def e(msg):
 
 def d(msg):
     log('Debug', msg)
+    pass
 
 
 def log(tag, msg):
-    print("[{0}] {1}({2}): {3}".format(
-        tag, datetime.datetime.today(), thread.get_ident(), msg))
+    # print("[{0}] {1}({2}): {3}".format(
+    #     tag, datetime.datetime.today(), thread.get_ident(), msg))
+    pass
