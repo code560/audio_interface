@@ -3,7 +3,6 @@ import pyaudio
 import wave
 import threading
 import time
-import atexit
 import sys
 import codecs
 
@@ -11,7 +10,7 @@ import util.logger as logger
 # import pdb
 
 # defines
-CHUNK = 1024
+CHUNK = 4096
 
 
 class SoundPlayer:
@@ -24,6 +23,10 @@ class SoundPlayer:
         self.event_pause = threading.Event()
         self.event_stop = threading.Event()
         self.event_init()
+
+        # effect params
+        # mod_samplingrate is playing samplingrate.
+        self.mod_samplingrate = 1.0
 
     def event_init(self):
         self.event_pause.clear()
@@ -67,10 +70,12 @@ class SoundPlayer:
             return (data, pyaudio.paContinue)
 
         # open stream
+        rate = int(wf.getframerate() * self.mod_samplingrate)
+        logger.d('rate = {}'.format(rate))
         p = pyaudio.PyAudio()
         s = p.open(format=p.get_format_from_width(wf.getsampwidth()),
                    channels=wf.getnchannels(),
-                   rate=wf.getframerate(),
+                   rate=rate,
                    frames_per_buffer=CHUNK,
                    output=True,
                    stream_callback=callback)
@@ -107,6 +112,11 @@ class SoundPlayer:
     def do_stop(self):
         self.event_stop.set()
 
+    def set_samplingrate(self, rate):
+        if rate > 0:
+            self.mod_samplingrate = rate
+        logger.i('set sampling rate = {}'.format(rate))
+
 
 def myhelp():
     print(u'これはサウンドプレイヤーです。')
@@ -116,6 +126,9 @@ def myhelp():
     print(u'  pause           : 一時停止')
     print(u'  resume          : 再生を再開する')
     print(u'  stop            : 再生を停止する')
+    print(u'  ')
+    print(u'  samplingrate    : サンプリング周波数を変更する')
+    print(u'  __未定義__')
     print(u'  __未定義__')
     print(u'  help            : ヘルプを表示')
     print(u'  exit            : 終了する')
@@ -128,6 +141,7 @@ if __name__ == '__main__':
              'pause': player.do_pause,
              'resume': player.do_resume,
              'stop': player.do_stop,
+             'samplingrate': (lambda r: player.set_samplingrate(float(r))),
              'help': myhelp,
              'exit': sys.exit}
     # sys.stdout = codecs.getw_piter('utf_8')(sys.stdout)

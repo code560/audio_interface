@@ -20,6 +20,6 @@ def d(msg):
 
 
 def log(tag, msg):
-    # print("[{0}] {1}({2}): {3}".format(
-    #     tag, datetime.datetime.today(), thread.get_ident(), msg))
+    print("[{0}] {1}({2}): {3}".format(
+        tag, datetime.datetime.today(), thread.get_ident(), msg))
     pass
