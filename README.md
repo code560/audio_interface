@@ -9,7 +9,7 @@ PyAudio==0.2.11
 > 実装/テスト環境はWindows10です。  
 
 # 使い方
-'''  
+
     $ py audio_interface\sound_player.py
     これはサウンドプレイヤーです。
     
@@ -30,5 +30,5 @@ PyAudio==0.2.11
     audio interface >> resume
     audio interface >> stop
     audio interface >> exit
-'''  
+
 
