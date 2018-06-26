@@ -5,6 +5,8 @@ import threading
 import sys
 import codecs
 import time
+import numpy as np
+import struct
 
 import util.logger as logger
 # import pdb
@@ -27,6 +29,7 @@ class SoundPlayer:
         # effect params
         # mod_samplingrate is playing samplingrate.
         self.mod_samplingrate = 1.0
+        self.mod_gain = 1.0
 
     def event_init(self):
         self.event_pause.clear()
@@ -49,35 +52,22 @@ class SoundPlayer:
         # open file
         logger.i('open file = {}'.format(wavfile))
         wf = wave.open(wavfile, 'rb')
-        wfinfo = wf.getparams()
-        self.show_wavinfo(wfinfo)
-        p = pyaudio.PyAudio()
+        self.wfinfo = wf.getparams()
+        self.show_wavinfo(self.wfinfo)
         try:
-            s = p.open(format=p.get_format_from_width(wfinfo[1]),
-                       channels=wfinfo[0],
-                       rate=wfinfo[2],
+            p = pyaudio.PyAudio()
+            s = p.open(format=p.get_format_from_width(self.wfinfo[1]),
+                       channels=self.wfinfo[0],
+                       rate=self.wfinfo[2],
                        output=True)
 
             # play stream
             input_data = wf.readframes(CHUNK)
             logger.i('started blocking sound play.')
             while len(input_data) > 0:
-                # controls
-                # stop
-                if self.event_stop.is_set():
-                    logger.i('stop sound.')
+                if self.ctrl_sound():
                     break
-                # pause
-                if self.event_pause.is_set():
-                    logger.i('pause sound.')
-                    while self.event_pause.is_set():
-                        time.sleep(0.1)
-                        if self.event_stop.is_set():
-                            # finish
-                            break
-                # write sound
-                output_data = self.mod_main(input_data)
-                s.write(output_data)
+                s.write(self.mod_sound(input_data))
                 input_data = wf.readframes(CHUNK)
 
         finally:
@@ -88,10 +78,32 @@ class SoundPlayer:
             p.terminate()
             logger.i('finished sound play.')
 
-    def mod_main(self, input_data):
-        #     # logger.d('non-blocking play ({}, {}, {}, {})'.format(in_data,
-        #     #                                                      frame_count, time_info, status))
-        return input_data
+    def ctrl_sound(self):
+        is_brake = False
+
+        # stop action
+        if self.event_stop.is_set():
+            logger.i('stop sound.')
+            is_brake = True
+        # pause action
+        if self.event_pause.is_set():
+            logger.i('pause sound.')
+            while self.event_pause.is_set():
+                time.sleep(0.1)
+                if self.event_stop.is_set():
+                    # finish
+                    break
+            is_brake = False
+
+        return is_brake
+
+    def mod_sound(self, input_data):
+        # logger.d('non-blocking play ({}, {}, {}, {})'.format(input_data)
+        data = np.frombuffer(input_data, 'int16')
+
+        # gain
+        output_data = struct.pack("h" * len(data), *data)
+        return output_data
 
     def do_play(self, wavfile):
         # clear event flags
@@ -114,53 +126,6 @@ class SoundPlayer:
         if rate > 0:
             self.mod_samplingrate = rate
         logger.i('set sampling rate = {}'.format(rate))
-
-
-        # def non-blocking callback
-        # def callback(in_data, frame_count, time_info, status):
-        #     input_data = wf.readframes(frame_count)
-
-        #     # stop
-        #     if self.event_stop.is_set():
-        #         logger.i('stop sound.')
-        #         return (input_data, pyaudio.paComplete)
-        #     # pause
-        #     if self.event_pause.is_set():
-        #         logger.i('pause sound.')
-        #         while self.event_pause.is_set():
-        #             time.sleep(0.1)
-        #             if self.event_stop.is_set():
-        #                 # finish
-        #                 break
-
-        #     # play
-        #     # logger.d('non-blocking play ({}, {}, {}, {})'.format(in_data,
-        #     #                                                      frame_count, time_info, status))
-
-        #     # mod wav
-        #     output_data = ''
-        #     for input_string in input_data:
-        #         if input_string == '':
-        #             continue
-
-        #         print('is = {}'.format(input_string))
-        #         if wfinfo[0] == 2:
-        #             input_value = struct.unpack('h', input_string)
-        #         else:
-        #             input_value = input_string
-
-        #         # effects
-        #         output_value = input_value
-
-        #         # write
-        #         if wfinfo[0] == 2:
-        #             output_string = struct.pack(
-        #                 'h', output_value, output_value)
-        #         else:
-        #             output_string = struct.pack('h', output_value)
-        #         output_data += output_string
-
-        #     return (output_data, pyaudio.paContinue)
 
 
 def myhelp():
@@ -197,10 +162,11 @@ if __name__ == '__main__':
         try:
             userinput = raw_input('audio interface >> ').lower()
         except KeyboardInterrupt:
+            # ctrl + c
             dicmd['stop']()
             dicmd['exit']()
         logger.d('thread count = {}'.format(threading.active_count()))
-
+        # enter only
         if len(userinput) == 0:
             continue
 
@@ -212,6 +178,3 @@ if __name__ == '__main__':
             cmd(cmds[1])
         else:
             cmd()
-
-    player.play(file)
-    # player.playsound(file)
