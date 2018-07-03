@@ -5,11 +5,9 @@ import threading
 import sys
 import codecs
 import time
-import numpy as np
-import struct
+import sound_effects as fx
 
 import util.logger as logger
-# import pdb
 
 # defines
 CHUNK = 1024
@@ -22,18 +20,18 @@ class SoundPlayer:
         self.loop = False
 
         # event flags
-        self.event_pause = threading.Event()
-        self.event_stop = threading.Event()
+        self._event_pause = threading.Event()
+        self._event_stop = threading.Event()
         self.event_init()
 
         # effect params
-        # mod_samplingrate is playing samplingrate.
-        self.mod_samplingrate = 1.0
-        self.mod_gain = 1.0
+        self._mod_samplingrate = 1.0
+        # 0 < volume < 1
+        self._mod_volume = 0.5
 
     def event_init(self):
-        self.event_pause.clear()
-        self.event_stop.clear()
+        self._event_pause.clear()
+        self._event_stop.clear()
 
     def show_wavinfo(self, wfinfo):
         logger.i(wfinfo)
@@ -82,15 +80,15 @@ class SoundPlayer:
         is_brake = False
 
         # stop action
-        if self.event_stop.is_set():
+        if self._event_stop.is_set():
             logger.i('stop sound.')
             is_brake = True
         # pause action
-        if self.event_pause.is_set():
+        if self._event_pause.is_set():
             logger.i('pause sound.')
-            while self.event_pause.is_set():
+            while self._event_pause.is_set():
                 time.sleep(0.1)
-                if self.event_stop.is_set():
+                if self._event_stop.is_set():
                     # finish
                     break
             is_brake = False
@@ -98,12 +96,17 @@ class SoundPlayer:
         return is_brake
 
     def mod_sound(self, input_data):
-        # logger.d('non-blocking play ({}, {}, {}, {})'.format(input_data)
-        data = np.frombuffer(input_data, 'int16')
+        data = fx.get_buffer(input_data, self.wfinfo[1])
 
-        # gain
-        output_data = struct.pack("h" * len(data), *data)
-        return output_data
+        # mod
+        if self._mod_samplingrate != 1.0:
+            data = fx.resamplingrate(data,
+                                     self.wfinfo[2],
+                                     self.wfinfo[2] * self._mod_samplingrate)
+
+        if self._mod_volume != 0.5:
+            data = fx.gain(data, self._mod_volume)
+        return fx.set_buffer(data)
 
     def do_play(self, wavfile):
         # clear event flags
@@ -114,18 +117,26 @@ class SoundPlayer:
         self.thread.start()
 
     def do_pause(self):
-        self.event_pause.set()
+        self._event_pause.set()
 
     def do_resume(self):
-        self.event_pause.clear()
+        self._event_pause.clear()
 
     def do_stop(self):
-        self.event_stop.set()
+        self._event_stop.set()
 
     def set_samplingrate(self, rate):
         if rate > 0:
-            self.mod_samplingrate = rate
+            self._mod_samplingrate = rate
         logger.i('set sampling rate = {}'.format(rate))
+
+    def set_volume(self, val):
+        if val < 0:
+            val = 0
+        elif val > 1:
+            val = 1
+        self._mod_volume = val
+        logger.i('set volume = {}'.format(val))
 
 
 def myhelp():
@@ -137,9 +148,9 @@ def myhelp():
     print(u'  resume          : 再生を再開する')
     print(u'  stop            : 再生を停止する')
     print(u'  ')
-    print(u'  samplingrate    : サンプリング周波数を変更する')
-    print(u'  __未定義__')
-    print(u'  __未定義__')
+    # print(u'  rate            : サンプリング周波数を変更する')
+    print(u'  vol             : 音量を変更する(0 - 1.0、default:0.5)')
+    print(u'  ')
     print(u'  help            : ヘルプを表示')
     print(u'  exit            : 終了する')
 
@@ -151,7 +162,8 @@ if __name__ == '__main__':
              'pause': player.do_pause,
              'resume': player.do_resume,
              'stop': player.do_stop,
-             'samplingrate': (lambda r: player.set_samplingrate(float(r))),
+             'rate': (lambda r: player.set_samplingrate(float(r))),
+             'vol': (lambda r: player.set_volume(float(r))),
              'help': myhelp,
              'exit': sys.exit}
     # sys.stdout = codecs.getw_piter('utf_8')(sys.stdout)
